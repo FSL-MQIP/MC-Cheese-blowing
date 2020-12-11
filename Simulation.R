@@ -20,18 +20,27 @@ count[count == "<18"] = "4.5"
 
 # box-cox
 library(MASS)
-#boxcox(count ~ 1)
+boxcox(count ~ 1)
+
+## Check the correct distribution to fit
+#count = as.numeric(count)
+#fit = fitdist(count_t,"norm", "mme")
+#summary(fit)
+#fit2 = fitdist(count, "pois", method = "mme")
+#summary(fit2)
+#fit3 = fitdist(count, "nbinom", method = "mme")
+#summary(fit3)
 
 # Visualize simulated distribution
 count_t = as.numeric(count)^0.1 
 #qqnorm(count_t);qqline(count_t)
 #par(mfrow=c(1,1))
-#hist(count_t,probability = T, xlim = c(1,2), breaks = 20, 
-     #main = "Histogram of spore count distribution",
-     #xlab = "Spore count^0.1 MPN/L",
-     #ylim = c(0,4))
-#tempx = seq(1,2,length.out = 100)
-#tempy = dnorm(tempx, mean(count_t), sd(count_t)); lines(tempx, tempy,col='red',lwd=2)
+hist(count_t,probability = T, xlim = c(1,2), breaks = 20, 
+     main = "Histogram of spore count distribution",
+     xlab = "Spore count^0.1 MPN/L",
+     ylim = c(0,4))
+tempx = seq(1,2,length.out = 100)
+tempy = dnorm(tempx, mean(count_t), sd(count_t)); lines(tempx, tempy,col='red',lwd=2)
 
 
 ## Simulation set-up -----------------------------------------------------------
@@ -41,105 +50,96 @@ vat_id = rep(1:n_sim, each = 20)
 block_id = rep(1:20, n_sim)
 
 ## Simulate var spore count as MPN/kg milk in cheese vat
-set.seed(1)
+
 vat_norm_count = rnorm(n_sim, mean(count_t), sd(count_t))
 vat_sim_count = vat_norm_count^10
 #hist(vat_sim_count, breaks = 50)
 
-## Simulate block spore count 
-mean_sd_ratio = mean(count_t)/sd(count_t)# simulate sd for block spore count
-block_sim_mean = vat_sim_count
-block_sim_sd = block_sim_mean/mean_sd_ratio
-
-block_sim_count = vector()
-set.seed(1)
-for (i in 1:n_sim){
-  block_sim_count = c(block_sim_count, 
-                      rnorm(20, block_sim_mean[i], block_sim_sd[i]))
-}
-
-
 ## Combine ids with initial spore count
-vat_count = round(rep(vat_sim_count, each = 20),1)
-block_count = round(block_sim_count,1)
-data = data.frame(vat_id, vat_count,block_id, block_count)
+vat_count = round(rep(vat_sim_count, each = 20))
+block_count = vector()
+for (i in 1:length(vat_count)){
+  block_count[i] = rpois(1, lambda = vat_count[i])
+}
+data = data.frame(vat_id, vat_count,block_id,block_count)
 #head(data, 20)
 #mean(data$block_sim_count)
 
 ## Ripening parameters
 temp = 14
-pH = runif(20*n_sim, min = 5.2, max = 5.6)
-data$pH = round(pH,2)
+pH = runif(n_sim, min = 5.2, max = 5.6)
+data$pH = round(rep(pH, each = 20),2)
 
-## Function to calculate final concentration 
-final_conc = function(N0, temp = 37, pH = 5.8, nitrite = 0, hour){
+
+#Functions-------------------------------------------------------------------------
+baranyi_log10N = function(t,lag,mumax,LOG10N0,LOG10Nmax) {
+  ans <- LOG10Nmax + log10((-1 + exp(mumax * lag) + exp(mumax * t))/(exp(mumax * t) - 1 + exp(mumax * lag) * 10^(LOG10Nmax -LOG10N0)))
+  return(ans)
+}
+
+final_conc = function(N0, temp = 37, pH = 5.8, aw = 1, aw_min, hour){
   #Default growth rate 
-  mumax = 0.12
-  
-  #Randomize mu*lambda
-  prod = runif(1, min = 1.02, max = 4.8)
-  
-  #Calculate the lag phase
-  lag = prod/mumax
+  mumax = 5.415
   
   #Gamma concenpt
   gamma_T = ((temp -10)/(37-10))^2
-  gamma_pH = (pH-4.6)*(7.5-pH)/(5.8-4.6)/(7.5-5.8)
-  gamma_nitrite = 1-nitrite/75
-  
-  #Add interaction term
-  theta_T = ((37-temp)/(37-10))^3
-  theta_pH = ((5.8-pH)/(5.8-4.6))^3
-  epi = theta_T/(2*(1-theta_pH))+theta_pH/(2*(1-theta_T))
-  if(epi<=0.5){
-    theta = 1
-  }  else if (epi>0.5&epi<1){
-    theta=2*(1-epi)
-  }  else{
-    theta=0
-  }
+  gamma_pH = (pH-4.65)*(7.3-pH)/(5.8-4.65)/(7.3-5.8)
+  gamma_aw = (aw-aw_min)/(1-aw_min)
   
   #Adjusted values
-  mu = mumax*gamma_T*gamma_pH*gamma_nitrite*theta
-  lag = 1/(1/lag*gamma_T*gamma_pH*gamma_nitrite*theta)
+  mu = mumax*gamma_T*gamma_pH*gamma_aw
+  mu = if (mu<0) 0 else mu
+  print(mu)
   
   #Model growth
-  time = hour - lag
-  if (time < 0){
-    time = 0
+  N = baranyi_log10N(hour, lag=0, mumax=mu, LOG10N0 = log10(N0), LOG10Nmax = 12.2)
+  10^N
+}
+
+
+aw_inhibit = function(pH){
+  salt_max_h = -4.7953*pH^2+55.187*pH-154.18
+  salt_max_l = -3.6257*pH^2+41.971*pH-118.42
+  aw_min_l = 0.995-0.00721*salt_max_h
+  aw_min_h = 0.995-0.00721*salt_max_l
+  aw_min = vector()
+  for (i in 1:length(pH)){
+    aw_min[i] = runif(1, aw_min_l[i],aw_min_h[i])
   }
-  Nmax = N0*(1+mu)^time
-  Nmax
+  
+  round(aw_min,3)
 }
 
 
-## Simulate final conc at day 70
-data$day70 = NA
-for (i in 1:length(data$day70)){
-data$day70[i] = final_conc(data$block_count[i], 
-                           temp = temp, 
-                           pH = pH[i], 
-                           hour = 70*24)
+day2nogrowth=function(aw){
 }
-data$day70 = round(data$day70,1)
-#head(data, 40)
-
-## Proportions of spoilage at day 70
-sum(data$day70>(10^4.23))/length(data$day70) # Threshold at log average
 
 
-## Simulate final conc at day 90
-data$day90 = NA
-for (i in 1:length(data$day90)){
-  data$day90[i] = final_conc(data$block_count[i], 
-                             temp = temp, 
-                             pH = pH[i], 
-                             hour = 90*24)
+aw_atday = function(days){
+  0.000004*days^2-0.0009*days+0.9896
 }
-data$day90 = round(data$day90,1)
-#head(data, 40)
 
-## Proportions of spoilage at day 90
-sum(data$day90>(10^4.23))/length(data$day90) # Threshold at log average
+#------------------------------------------
+## add time limit based on pH
+data$aw_inhibit = round(aw_inhibit(data$pH),3)
 
+final_count = final_conc(data$block_count, temp = 14, pH=data$pH, aw=aw_atday(1),aw_min=data$aw_inhibit, hour=1*24)
+final_count = cbind(final_count, 
+                    final_conc(final_count, temp = 14, pH=data$pH, aw=aw_atday(2),aw_min=data$aw_inhibit, hour=1*24))
+for (i in 3:37){
+  N0 = final_count[,i-1]
+  new = final_conc(N0, temp = 14, pH=data$pH, aw=aw_atday(i),aw_min=data$aw_inhibit,hour=1*24)
+  final_count = cbind(final_count, new)
+}
 
+var_name = vector()
+for (i in 1:37){
+  var_name[i] = paste("day",as.character(i),sep = "_")
+}
+
+colnames(final_count) = var_name
+data = cbind(data, final_count)
+
+hist(log10(data$day_25), freq = F)
+
+sum(log10(data$day_25)>9.185)/(20*n_sim)
