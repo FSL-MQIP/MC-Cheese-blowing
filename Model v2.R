@@ -11,6 +11,8 @@ library(dplyr)
 library(fitdistrplus)
 library(EnvStats)
 library(ggplot2)
+library(reshape2)
+library(plotly)
 
 ##Data cleaning
 colnames(Spore)[1] = "ID"
@@ -56,7 +58,7 @@ baranyi_log10N = function(t,lag,mumax,LOG10N0,LOG10Nmax){
 
 final_conc = function(N0, temp = 37, pH = 5.8, aw = 1, aw_min, hour){
   #Default growth rate 
-  mumax = 1.44
+  mumax = 0.76
   
   #Gamma concenpt
   gamma_T = ((temp -10)/(37-10))^2
@@ -77,7 +79,7 @@ final_conc = function(N0, temp = 37, pH = 5.8, aw = 1, aw_min, hour){
 
 mumax = function(temp, pH, aw=1){
   #Default growth rate 
-  mumax = 1.44
+  mumax = 0.76
   
   #Gamma concenpt
   gamma_T = ((temp -10)/(37-10))^2
@@ -110,18 +112,11 @@ vat_id = rep(1:n_sim, each = 20)
 block_id = rep(1:20, n_sim)
 
 ## Simulate var spore count as MPN/kg milk in cheese vat
-
 vat_norm_count = rnorm(n_sim, mean(count_t), sd(count_t))
 vat_sim_count = vat_norm_count^10
-#hist(vat_sim_count, breaks = 50)
 
 ## Combine ids with initial spore count
 vat_count = round(rep(vat_sim_count, each = 20))
-
-## Worst case N0
-#vat_count = round(rep(vat_sim_count*10, each = 20))
-## Best case N0
-#vat_count = round(rep(vat_sim_count/10, each = 20))
 
 
 block_count = vector()
@@ -133,40 +128,33 @@ for (i in 1:length(vat_count)){
 conc_factor = 6
 block_count = conc_factor*block_count
 
-
 # Combining data
 data = data.frame(vat_id, vat_count,block_id,block_count)
-#head(data, 20)
-#mean(data$block_sim_count)
 
 ## Ripening parameters
-temp = 14
-# Worst temp
-#temp = 16
-# Best temp
-#temp = 12
-
-#pH = runif(n_sim, min = 5.2, max = 5.3)
+temp = 13
 pH= rtri(n_sim, min = 5.1, max = 5.63, mode = 5.4)
 data$pH = round(rep(pH, each = 20),2)
-data$mumax = round(mumax(temp,data$pH,aw=0.953),5)
+data$mumax = round(mumax(temp,data$pH,aw=salt2aw(4.9)),5)
 
 #------------------------------------------
 # Threshold level calculation
-low_mumax = mumax(13,5.04,0.962)
-high_mumax = mumax(13,5.01,0.962)
+low_mumax = mumax(13,5.04,salt2aw(3.7))
+high_mumax = mumax(13,5.01,salt2aw(3.7))
 low_bound = baranyi_log10N(t=70*24, lag=0, mumax=low_mumax,  log10(250), log10(40000000))
 high_bound = baranyi_log10N(t=60*24, lag=0, mumax=high_mumax,  log10(2500), log10(40000000))
 
+#
+#data = data %>% filter(vat_count>=1000)
 
 # Model simulation
 final_count = vector()
-for (i in c(50,60,70,80,90,120)){
+for (i in c(30,60,70,80,90,120)){
   new = baranyi_log10N(t=i*24, lag=0, mumax=data$mumax,log10(data$block_count), log10(40000000))
   final_count = cbind(final_count, new) %>% round(3)
 }
 
-name = c("day50","day60","day70","day80","day90","day120")
+name = c("day30","day60","day70","day80","day90","day120")
 colnames(final_count) = name
 final_count = as.data.frame(final_count)
 
@@ -174,43 +162,101 @@ final_count = as.data.frame(final_count)
 ## Check results
 result = vector()
 for (i in 1:ncol(final_count)){
-  high = sum(final_count[i]>low_bound)/(20*n_sim)
-  low = sum(final_count[i]>high_bound)/(20*n_sim)
+  high = mean(final_count[i]>low_bound)
+  low = mean(final_count[i]>high_bound)
   prob = c(high, low)
   result = cbind(result, prob)
 }
 colnames(result) = name
-rownames(result) = c("High prob", "Low prob")
+rownames(result) = c("High_prob", "Low_prob")
 result
 
-
-hist(final_count$day60, freq = F)
+## Append the final count to the data
 data = data %>% cbind(final_count)
 
-
-##-----------------------------------------------------------------------------------------------------------
-# Sensitivity analysis
-
-# Threshold level
-# 
-
-
-
-
-
-
-
-
-
-
-
+## Stack histograms of distribution at differnet day 
+lbd = gather(final_count, key="day", value="logcount")
+lbd = lbd %>% filter(day ==c("day60", "day90","day120"))
+  
+ggplot(lbd, aes(x=logcount, color=day,fill=day)) +
+  geom_histogram(aes(y=..density..),position = "identity", alpha=0.5, binwidth = 0.1) +
+  geom_density(alpha=.2)+
+  scale_x_continuous(breaks = scales::pretty_breaks(10))+
+  theme_classic()+
+  theme(legend.position="top")+
+  geom_vline(aes(xintercept=low_bound),
+             color="red", linetype="dashed", size=1)+
+  geom_vline(aes(xintercept=high_bound),
+             color="red", linetype="dashed", size=1)+
+  labs(title="C.tyrobutyricum logcount at different ripening time",x="logcount(MPN/kg)", y = "Density")
 
 
 
+##Sensitivity analysis-----------------------------------------------------------------------------------------------------------
 
 
 
 
+
+
+
+
+## Cumulative probability of late blowing -------------------------------------------------------------------------------------------------
+cum_prob = as.data.frame(t(result))
+mean_prob = mean()
+cum_prob = cum_prob %>% mutate(mean_prob = (High_prob+Low_prob)/2)
+ggplot(data =cum_prob, aes(x=c(30,60,70,80,90,120),y=(mean_prob)))+
+  geom_line(aes(y=mean_prob)) +
+  geom_ribbon(aes(ymin = Low_prob, ymax= High_prob), fill = "grey70", alpha =0.3)+
+  labs(title="Cumulative probability of LBD at different ripening time",
+       x="Ripening time (days)",
+       y="Cumulative probability")+
+  theme_classic()+
+  scale_x_continuous(breaks = scales::pretty_breaks(10))
+
+
+
+
+
+
+## Contour plot--------------------------------------------------------------------------------------------------------------
+# day 60
+bound_low = data %>% filter(final_count$day60> (low_bound-0.0001),  final_count$day60< (low_bound+0.0001))
+bound_high = data %>% filter(final_count$day60> (high_bound-0.001),  final_count$day60< (high_bound+0.001))
+bound_level = c(rep("low", nrow(bound_low)),rep("high", nrow(bound_high)))
+bound = bind_rows(bound_low, bound_high) %>% cbind(bound_level)
+
+bound %>% ggplot(aes(x=pH,y=log10(vat_count), col=bound_level)) +
+              geom_point()+
+              geom_hline(yintercept=2, size =5, alpha=0.3)+
+              geom_vline(xintercept=5.4, size=5, alpha=0.3)+
+              theme_classic()+
+  labs(title="Defect boundary line at day 60",x="pH", y = "Raw milk logcount (MPN/L)")
+
+# day 90
+bound_low = data %>% filter(final_count$day90> (low_bound-0.001),  final_count$day90< (low_bound+0.001))
+bound_high = data %>% filter(final_count$day90> (high_bound-0.001),  final_count$day90< (high_bound+0.001))
+bound_level = c(rep("low", nrow(bound_low)),rep("high", nrow(bound_high)))
+bound = bind_rows(bound_low, bound_high) %>% cbind(bound_level)
+bound %>% ggplot(aes(x=pH,y=log10(vat_count), col=bound_level)) +
+  geom_point()+
+  geom_hline(yintercept=2, size =5, alpha=0.3)+
+  geom_vline(xintercept=5.4, size=5, alpha=0.3)+
+  theme_classic()+
+  labs(title="Defect boundary line at day 90",x="pH", y = "Raw milk logcount (MPN/L)")
+
+
+## 3D plot
+ripen30 = data %>% filter(final_count$day30> (high_bound-0.001),  final_count$day30< (high_bound+0.001))
+ripen60 = data %>% filter(final_count$day60> (high_bound-0.001),  final_count$day60< (high_bound+0.001))
+ripen70 = data %>% filter(final_count$day70> (high_bound-0.001),  final_count$day70< (high_bound+0.001)) 
+ripen80 = data %>% filter(final_count$day80> (high_bound-0.001),  final_count$day80< (high_bound+0.001)) 
+ripen90 = data %>% filter(final_count$day90> (high_bound-0.001),  final_count$day90< (high_bound+0.001))
+ripen120 = data %>% filter(final_count$day120> (high_bound-0.001),  final_count$day120< (high_bound+0.001))
+time = c(rep(30, nrow(ripen30)),rep(60, nrow(ripen60)),rep(70, nrow(ripen70)),rep(80, nrow(ripen80)),rep(90, nrow(ripen90)),rep(120, nrow(ripen120)))
+ripen_data = rbind(ripen30, ripen60, ripen70, ripen80, ripen90, ripen120) %>% cbind(time)
+fig = plot_ly(data=ripen_data, x=~pH, y=~vat_count, z=~time) %>% add_mesh()
+fig
 
 ## Error analysis---------------------------------------------------------------------------------------------------
 
@@ -261,15 +307,4 @@ for (i in 1:6){
 rownames(blow_high) = name
 blow_high
 
-
-# Boundary line
-bound_low = data %>% filter(final_count$day60> (low_bound-0.01),  final_count$day60< (low_bound+0.01))
-plot(x=bound_low$pH, y=log10(bound_low$block_count), xlab="pH", ylab="log count (MPN/kg)",
-     main = "Boundary line at day 50 for low threshold",
-     xlim = c(5.1,5.63))
-
-bound_high = data %>% filter(final_count$day60> (high_bound-0.01),  final_count$day60< (high_bound+0.01))
-plot(x=bound_high$pH, y=log10(bound_high$block_count), xlab="pH", ylab="log count (MPN/kg)",
-     main = "Boundary line at day 50 for high threshold",
-     xlim = c(5.1,5.63))
 
