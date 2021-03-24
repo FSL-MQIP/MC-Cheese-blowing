@@ -104,6 +104,14 @@ salt2aw = function(salt){
 }
 
 
+
+
+
+
+
+
+
+
 ## Simulation set-up -----------------------------------------------------------
 ## Cheese vat and block identifications
 set.seed(1)
@@ -139,9 +147,9 @@ data$mumax = round(mumax(temp,data$pH,aw=salt2aw(4.9)),5)
 
 #------------------------------------------
 # Threshold level calculation
-low_mumax = mumax(13,5.04,salt2aw(3.7))
-high_mumax = mumax(13,5.01,salt2aw(3.7))
-low_bound = baranyi_log10N(t=70*24, lag=0, mumax=low_mumax,  log10(250), log10(40000000))
+low_mumax = mumax(13,5.0,salt2aw(3.7))
+high_mumax = mumax(13,5.0,salt2aw(3.7))
+low_bound = baranyi_log10N(t=70*24, lag=0, mumax=low_mumax,  log10(1300), log10(40000000))
 high_bound = baranyi_log10N(t=60*24, lag=0, mumax=high_mumax,  log10(2500), log10(40000000))
 
 #
@@ -195,22 +203,31 @@ ggplot(lbd, aes(x=logcount, color=day,fill=day)) +
 ##Sensitivity analysis-----------------------------------------------------------------------------------------------------------
 
 
+##What-if scenario ---------------------------------------------------------------------------------
 
+# Microfiltration
+high_count = data%>% filter(vat_count>=1000)
+mean(high_count$day90>low_bound)
+mean(high_count$day90>high_bound)
 
-
-
-
+low_count = high_count %>% mutate(vat_count = round(vat_count*0.02))
+for (i in 1:nrow(low_count)){
+  low_count$block_count[i] = rpois(1, lambda = low_count$vat_count[i])
+}
+low_count$block_count = low_count$block_count*conc_factor
+low_count$day90 = baranyi_log10N(t=90*24, lag=0, mumax=low_count$mumax,log10(low_count$block_count), log10(40000000))
+mean(low_count$day90>low_bound)
+mean(low_count$day90>high_bound)
 
 ## Cumulative probability of late blowing -------------------------------------------------------------------------------------------------
 cum_prob = as.data.frame(t(result))
-mean_prob = mean()
 cum_prob = cum_prob %>% mutate(mean_prob = (High_prob+Low_prob)/2)
 ggplot(data =cum_prob, aes(x=c(30,60,70,80,90,120),y=(mean_prob)))+
   geom_line(aes(y=mean_prob)) +
   geom_ribbon(aes(ymin = Low_prob, ymax= High_prob), fill = "grey70", alpha =0.3)+
-  labs(title="Cumulative probability of LBD at different ripening time",
+  labs(title="Cumulative proportion of LBD at different ripening time",
        x="Ripening time (days)",
-       y="Cumulative probability")+
+       y="Cumulative proportion")+
   theme_classic()+
   scale_x_continuous(breaks = scales::pretty_breaks(10))
 
@@ -267,9 +284,12 @@ for (i in 1:6){
   blow = data %>% filter(final_count[,i]>=low_bound)
   mean_pH = mean(blow$pH)
   sd_pH = sd(blow$pH)
-  mean_block_count=mean(log10(blow$block_count))
-  sd_block_count = sd(log10(blow$block_count))
-  sum = cbind(mean_pH, sd_pH, mean_block_count, sd_block_count)
+  min_pH= min(blow$pH)
+  max_pH = max(blow$pH)
+  mean_vat_count=mean(log10(blow$vat_count))
+  sd_vat_count = sd(log10(blow$vat_count))
+  min_vat_count = min(log10(blow$vat_count))
+  sum = cbind(mean_pH, sd_pH, min_pH, max_pH,mean_vat_count, sd_vat_count, min_vat_count)
   blow_low = rbind(blow_low, sum)
   
 }
@@ -282,9 +302,11 @@ for (i in 1:6){
   noblow = data %>% filter(final_count[,i]<low_bound)
   mean_pH = mean(blow$pH)
   sd_pH = sd(blow$pH)
+  min_pH= min(blow$pH)
+  max_pH = max(blow$pH)
   mean_block_count=mean(log10(blow$block_count))
   sd_block_count = sd(log10(blow$block_count))
-  sum = cbind(mean_pH, sd_pH, mean_block_count, sd_block_count)
+  sum = cbind(mean_pH, sd_pH, min_pH, max_pH,mean_block_count, sd_block_count)
   noblow_low = rbind(noblow_low, sum)
   
 }
@@ -298,9 +320,9 @@ for (i in 1:6){
   blow = data %>% filter(final_count[,i]>high_bound)
   mean_pH = mean(blow$pH)
   sd_pH = sd(blow$pH)
-  mean_block_count=mean(log10(blow$block_count))
-  sd_block_count = sd(log10(blow$block_count))
-  sum = cbind(mean_pH, sd_pH, mean_block_count, sd_block_count)
+  mean_vat_count=mean(log10(blow$vat_count))
+  sd_vat_count = sd(log10(blow$vat_count))
+  sum = cbind(mean_pH, sd_pH, mean_vat_count, sd_vat_count)
   blow_high = rbind(blow_high, sum)
   
 }
