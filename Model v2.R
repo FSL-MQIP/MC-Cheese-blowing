@@ -182,6 +182,24 @@ result
 ## Append the final count to the data
 data = data %>% cbind(final_count)
 
+
+## Error analysis
+data[final_count$day30 > high_bound, ]$vat_count %>% log10() %>% mean()  #average conc. for cheese LBD
+data[final_count$day30 > low_bound, ]$vat_count %>% log10() %>% mean()
+data[final_count$day30 > high_bound, ]$pH %>% mean()  #average pH for cheese LBD
+data[final_count$day30 > low_bound, ]$pH %>% mean()
+
+data[final_count$day30 < high_bound & vat_count!=0, ]$vat_count %>% log10() %>% mean()  #average conc. for cheese without LBD
+data[final_count$day30 < low_bound & vat_count!=0, ]$vat_count %>% log10() %>% mean()
+data[final_count$day30 < high_bound, ]$pH %>% mean()  #average pH for cheese without LBD
+data[final_count$day30 < low_bound, ]$pH %>% mean()
+
+final_count$day30[final_count$day30 != -Inf] %>% mean()
+final_count$day60[final_count$day60 != -Inf] %>% mean()
+final_count$day90[final_count$day90 != -Inf] %>% mean()
+final_count$day120[final_count$day120 != -Inf] %>% mean()
+
+
 ## Stack histograms of distribution at differnet day 
 lbd = gather(final_count, key="day", value="logcount")
 lbd = lbd %>% filter(day ==c("day60", "day90","day120"))

@@ -30,7 +30,8 @@ data$mumax = data$mumax/1.86
 
 ## 5. Premium raw milk
 ## Truncate raw milk spore count over 25 MPN/L
-data = data %>% filter(vat_count<=25)
+index = which(data$vat_count<=25)
+final_count = final_count[index,]
 
 
 ## 6. Lower ripening temperature
