@@ -120,7 +120,9 @@ vat_id = rep(1:n_sim, each = 20)
 block_id = rep(1:20, n_sim)
 
 ## Simulate var spore count as MPN/kg milk in cheese vat
-vat_norm_count = rnorm(n_sim, mean(count_t), sd(count_t))
+mean_to_sd = mean(count_t)/sd(count_t)
+mean_count = (10^1.85)^0.1
+vat_norm_count = rnorm(n_sim, mean_count, mean_count/mean_to_sd)
 vat_sim_count = vat_norm_count^10
 
 ## Combine ids with initial spore count
@@ -170,51 +172,104 @@ final_count = as.data.frame(final_count)
 ## Check results
 result = vector()
 for (i in 1:ncol(final_count)){
-  high = mean(final_count[i]>low_bound)
-  low = mean(final_count[i]>high_bound)
-  prob = c(high, low)
+  high = round(mean(final_count[i]>low_bound)*100,3)
+  low = round(mean(final_count[i]>high_bound)*100,3)
+  avg = round(mean(c(high,low)),3)
+  prob = c(high, low, avg)
   result = cbind(result, prob)
 }
 colnames(result) = name
-rownames(result) = c("High_prob", "Low_prob")
+rownames(result) = c("Upper_percent", "Lower_percent", "Avg_percent")
 result
 
 ## Append the final count to the data
 data = data %>% cbind(final_count)
 
+## Remove NAs
+data$day30 = ifelse(data$day30 == -Inf, 1, data$day30)
+data$day60 = ifelse(data$day60 == -Inf, 1, data$day60)
+data$day90 = ifelse(data$day90 == -Inf, 1, data$day90)
+data$day120 = ifelse(data$day120 == -Inf, 1, data$day120)
+
+data$day60 %>% sd()
+data$day90 %>% sd()
+data$day120 %>% sd()
 
 ## Error analysis
-data[final_count$day30 > high_bound, ]$vat_count %>% log10() %>% mean()  #average conc. for cheese LBD
-data[final_count$day30 > low_bound, ]$vat_count %>% log10() %>% mean()
-data[final_count$day30 > high_bound, ]$pH %>% mean()  #average pH for cheese LBD
-data[final_count$day30 > low_bound, ]$pH %>% mean()
+data[final_count$day30 < high_bound, ]$vat_count %>% log10() %>% range()  #average conc. for cheese LBD
+data[final_count$day30 < high_bound, ]$vat_count %>% log10() %>% mean()
+data[final_count$day30 < low_bound, ]$vat_count %>% log10() %>% range()
+data[final_count$day30 < low_bound, ]$vat_count %>% log10() %>% mean()
+data[final_count$day30 < high_bound, ]$pH %>% range()  #average pH for cheese LBD
+data[final_count$day30 < high_bound, ]$pH %>% mean()
+data[final_count$day30 < low_bound, ]$pH %>% range()
+data[final_count$day30 < low_bound, ]$pH %>% mean()
+
+data[final_count$day60 < high_bound,]$vat_count %>% log10() %>% range()  #average conc. for cheese LBD
+data[final_count$day60 < high_bound,]$vat_count %>% log10() %>% mean()
+data[final_count$day60 < low_bound,]$vat_count %>% log10() %>% range()
+data[final_count$day60 < low_bound,]$vat_count %>% log10() %>% mean()
+data[final_count$day60 < high_bound,]$pH %>% range()  #average pH for cheese LBD
+data[final_count$day60 < high_bound,]$pH %>% mean()
+data[final_count$day60 < low_bound,]$pH %>% range()
+data[final_count$day60 < low_bound,]$pH %>% mean()
+
+data[final_count$day90 < high_bound, ]$vat_count %>% log10() %>% range()  #average conc. for cheese LBD
+data[final_count$day90 < high_bound, ]$vat_count %>% log10() %>% mean()
+data[final_count$day90 < low_bound, ]$vat_count %>% log10() %>% range()
+data[final_count$day90 < low_bound, ]$vat_count %>% log10() %>% mean()
+data[final_count$day90 < high_bound, ]$pH %>% range()  #average pH for cheese LBD
+data[final_count$day90 < high_bound, ]$pH %>% mean()
+data[final_count$day90 < low_bound, ]$pH %>% range()
+data[final_count$day90 < low_bound, ]$pH %>% mean()
+
+data[final_count$day120 < high_bound, ]$vat_count %>% log10() %>% range()  #average conc. for cheese LBD
+data[final_count$day120 < high_bound, ]$vat_count %>% log10() %>% mean()
+data[final_count$day120 < low_bound, ]$vat_count %>% log10() %>% range()
+data[final_count$day120 < low_bound, ]$vat_count %>% log10() %>% mean()
+data[final_count$day120 < high_bound, ]$pH %>% range()  #average pH for cheese LBD
+data[final_count$day120 < high_bound, ]$pH %>% mean()  
+data[final_count$day120 < low_bound, ]$pH %>% range()
+data[final_count$day120 < low_bound, ]$pH %>% mean()
 
 data[final_count$day30 < high_bound & vat_count!=0, ]$vat_count %>% log10() %>% mean()  #average conc. for cheese without LBD
 data[final_count$day30 < low_bound & vat_count!=0, ]$vat_count %>% log10() %>% mean()
 data[final_count$day30 < high_bound, ]$pH %>% mean()  #average pH for cheese without LBD
 data[final_count$day30 < low_bound, ]$pH %>% mean()
 
-final_count$day30[final_count$day30 != -Inf] %>% mean()
-final_count$day60[final_count$day60 != -Inf] %>% mean()
-final_count$day90[final_count$day90 != -Inf] %>% mean()
-final_count$day120[final_count$day120 != -Inf] %>% mean()
+
+idex = (final_count$day30 == -Inf)
+final_count$day30[idex] = 0
+final_count$day60[idex] = 0
+final_count$day90[idex] = 0
+final_count$day120[idex] = 0
+
+final_count$day30 %>% median()
+final_count$day60 %>% median()
+final_count$day90 %>% median()
+final_count$day120 %>% median()
 
 
 ## Stack histograms of distribution at differnet day 
 lbd = gather(final_count, key="day", value="logcount")
-lbd = lbd %>% filter(day ==c("day60", "day90","day120"))
+lbd = lbd %>% filter(day ==c("day60","day90","day120"))
   
-ggplot(lbd, aes(x=logcount, color=day,fill=day)) +
+ggplot(lbd, aes(x=logcount,color="black",fill=day)) +
   geom_histogram(aes(y=..density..),position = "identity", alpha=0.5, binwidth = 0.1) +
-  geom_density(alpha=.2)+
+  geom_density(alpha=0.6)+
   scale_x_continuous(breaks = scales::pretty_breaks(10))+
   theme_classic()+
-  theme(legend.position="top")+
+  scale_fill_manual(values=c("#000000","#ffffff", "#808080"))+
+  scale_color_grey()+
+  theme(legend.position="none")+
+  theme(axis.text=element_text(size=12),
+        axis.title=element_text(size=12),
+        title=element_text(size=24))+
   geom_vline(aes(xintercept=low_bound),
-             color="red", linetype="dashed", size=1)+
+             color="black", linetype="dashed", size=1)+
   geom_vline(aes(xintercept=high_bound),
-             color="red", linetype="dashed", size=1)+
-  labs(title="C.tyrobutyricum logcount at different ripening time",x="logcount(MPN/kg)", y = "Density")
+             color="black", linetype="dashed", size=1)+
+  labs(x="logcount(MPN/kg)", y = "Density")
 
 
 
@@ -239,14 +294,17 @@ mean(low_count$day90>high_bound)
 
 ## Cumulative probability of late blowing -------------------------------------------------------------------------------------------------
 cum_prob = as.data.frame(t(result))
-cum_prob = cum_prob %>% mutate(mean_prob = (High_prob+Low_prob)/2)
-ggplot(data =cum_prob, aes(x=c(30,60,70,80,90,120),y=(mean_prob)))+
-  geom_line(aes(y=mean_prob)) +
-  geom_ribbon(aes(ymin = Low_prob, ymax= High_prob), fill = "grey70", alpha =0.3)+
-  labs(title="Cumulative proportion of LBD at different ripening time",
-       x="Ripening time (days)",
-       y="Cumulative proportion")+
+cum_prob = cum_prob %>% mutate(mean_prob = (Upper_percent+Lower_percent)/2)
+ggplot(data =cum_prob, aes(x=c(30,60,70,80,90,120),y=(Avg_percent)))+
+  geom_line(aes(y=Avg_percent)) +
+  geom_ribbon(aes(ymin = Lower_percent, ymax= Upper_percent), fill = "grey70", alpha =0.3)+
+  labs(x="Ripening time (days)",
+       y="Cumulative proportion (%)")+
   theme_classic()+
+  theme(axis.text=element_text(size=16),
+        axis.title=element_text(size=16),
+        title=element_text(size=24),
+        legend.text = element_text(size=16))+
   scale_x_continuous(breaks = scales::pretty_breaks(10))
 
 

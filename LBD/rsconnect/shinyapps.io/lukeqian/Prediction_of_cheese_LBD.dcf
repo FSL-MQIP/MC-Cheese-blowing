@@ -5,8 +5,8 @@ account: lukeqian
 server: shinyapps.io
 hostUrl: https://api.shinyapps.io/v1
 appId: 3885390
-bundleId: 4412377
+bundleId: 4443568
 url: https://lukeqian.shinyapps.io/Prediction_of_cheese_LBD/
-when: 1617120515.74875
+when: 1617827004.5295
 asMultiple: FALSE
 asStatic: FALSE
