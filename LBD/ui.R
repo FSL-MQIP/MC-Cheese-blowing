@@ -5,7 +5,7 @@ library(shinycssloaders)
 shinyUI(fluidPage(
 
     # Application title
-    titlePanel("Prediction of cheese late blowing"),
+    #titlePanel("Prediction of cheese late blowing"),
 
     # Sidebar with checkbox for prevention strategies
     sidebarLayout(
@@ -18,7 +18,7 @@ shinyUI(fluidPage(
             checkboxInput("nitrate","Addition of nitrate at 2.5g/ 100L milk", value = FALSE),
             checkboxInput("lysozyme","Addition of lysozyme at 2.5g/ 100L milk", value = FALSE),
             checkboxInput("lab","Use of bacteriocinogenic LAB at 0.3% level", value = FALSE),
-            h4("Sensitivity analysis"),
+            #h4("Sensitivity analysis"),
             #sliderInput("mu_change","Proportional change in optimal growth rate", -0.4,0.4,value=0),
             #sliderInput("cf_change", "Absolute change in concentration factor", -2,2,value=0),
             #sliderInput("tl_change","Absolute change (log10) in threshold level", -0.5,0.5,value=0),
